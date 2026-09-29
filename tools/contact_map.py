@@ -5,7 +5,11 @@ matters: a peptide can stack the methoxyphenyl ring, bury the 2-ethylhexyl tail,
 ester in the middle, and those are different binding modes with different prospects in water.
 The ligand is split into moieties from its own SMILES, so nothing is hard-coded.
 
-Usage: python contact_map.py <smiles> <cif> [<cif> ...]
+Boltz names a SMILES ligand's atoms by a global index (`C38`) where BoltzGen uses a
+per-element count (`C17`), but both write them in the molecule's own order, so `--by-order`
+matches one file's atoms to the other's naming and lets folds from either be compared.
+
+Usage: python contact_map.py <smiles> [--by-order] <cif> [<cif> ...]
 """
 import sys
 from collections import defaultdict
@@ -60,7 +64,9 @@ def moieties(smiles):
                 group.setdefault(names[at.GetIdx()], "vinyl")
     for n in names:
         group.setdefault(n, "tail")              # 2-ethylhexyl, and its ester oxygen's carbon
-    return group, ["ring", "methoxy", "vinyl", "ester", "tail"]
+    # `names` is in molecule order, which is the order every Boltz-family writer uses for the
+    # atom records; `group` is keyed by name but built classification-first, so it is not.
+    return group, ["ring", "methoxy", "vinyl", "ester", "tail"], names
 
 
 def read_peptide(path):
@@ -80,13 +86,15 @@ def read_peptide(path):
 
 
 def main(smiles, paths, cutoff=4.5):
-    group, order = moieties(smiles)
+    by_order = "--by-order" in paths
+    paths = [p for p in paths if not p.startswith("--")]
+    group, order, names_in_order = moieties(smiles)
     counts = defaultdict(int)
     for g in group.values():
         counts[g] += 1
     print("ligand moieties: " + ", ".join(f"{g} {counts[g]}" for g in order if counts[g]))
     for path in paths:
-        lig = read_ligand(path)
+        lig = read_ligand(path, order=names_in_order if by_order else None)
         pep = read_peptide(path)
         engaged = defaultdict(set)      # moiety -> ligand atoms contacted
         by_res = defaultdict(set)       # residue -> moieties it contacts

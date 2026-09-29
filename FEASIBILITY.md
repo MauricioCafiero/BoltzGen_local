@@ -193,6 +193,99 @@ The bf16 structures are kept in `results/bf16_precision_artifact/` because they 
 for that, and `tools/lig_geom.py` is the check -- worth running on any predicted complex before
 its geometry is trusted.
 
+## Dynamics and MM/GBSA: what the physics selects, unprompted
+
+`bg33_3` -- the one structured, fully-wrapping design -- was put through `peptidebuilder`'s own
+MD and MM/GBSA protocol locally, 20 ns in `openmm-md` via the `omd` CLI, the same code its Modal
+runs import. 5,088 particles in a dodecahedral box, 1.11 ms/step, 156 ns/day, 3.1 h.
+
+The MM/GBSA windows were computed *while* the dynamics ran: the trajectory is on OpenCL and a
+window is 4 to 13 minutes of one CPU core, and memory free stayed at 33-46% throughout. So the
+convergence series cost nothing beyond the trajectory itself. `md/windows_live.sh` does this;
+`md/window_live.py` slices by streaming rather than loading the file, because `mdtraj.load` on a
+growing 20 ns trajectory is ~700 MB resident and the machine is already swapping under the run.
+
+| window | dG bind | change |
+|---|---|---|
+| 2.46 ns | -14.55 +- 0.05 | -- |
+| 5 ns | -12.46 +- 0.05 | +2.09 |
+| 10 ns | -11.33 +- 0.03 | +1.13 |
+| 15 ns | -11.50 +- 0.03 | -0.17 |
+| **20 ns** | **-11.86 +- 0.02** | -0.36 |
+
+Converged, and last of everything measured in this project -- below both of its shuffled null
+controls. All the structures compared are 33 or 34 residues, so unlike the static comparison
+this one needs no length caveat.
+
+| structure | VDWAALS | EEL | EGB | ESURF | dG | aromatics on the ligand |
+|---|---|---|---|---|---|---|
+| `s3_orig_f12` | **-34.41** | -7.99 | +22.74 | -4.66 | **-24.33** | 4 |
+| `s3_esm2_f4` | -23.45 | -2.60 | +8.58 | -3.61 | -21.08 | 2 |
+| `s2_esm2_control` | -19.12 | -2.62 | +8.17 | -2.67 | -16.25 | 2 |
+| `shuffle_control` (null) | -21.16 | -6.43 | +15.42 | -2.96 | -15.13 | 2 |
+| `shuffle_control_esm0` (null) | -17.64 | -5.75 | +11.72 | -2.65 | -14.32 | 2 |
+| `orig_f12` | -19.75 | -5.32 | +14.01 | -2.64 | -13.71 | 0 |
+| **`bg33_3`** | **-14.15** | -1.61 | +6.18 | -2.28 | **-11.86** | **0** |
+
+**The deficit is dispersion.** `bg33_3` has the weakest van der Waals term of the seven, and the
+smallest EGB penalty -- it buries little polar surface, and that saving does not compensate. What
+it contacts the ligand with is `I2 V3 L4 K5 I15 K18 L19`: aliphatics, two lysines, 22 backbone
+contacts, and **no aromatic side chain at all**. The ligand is a methoxycinnamate, so an aromatic
+ring and a conjugated vinyl -- exactly what a tryptophan or phenylalanine stacks against.
+
+**And the pose does not hold.** Over the full 20 ns, contacts fall 17.8 -> 10.1 (mean 11.3),
+separation goes 8.76 -> 10.62 A, residence within 10 A is **41.0%** and there are 20 released
+frames in 18 episodes. The worst residence and the most episodes of anything measured here,
+against 100% and zero for `s3_orig_f12`. The first 2.5 ns looked perfect -- 94% residence, no
+releases -- which is the same trap the dG windows set: a short window measures the predicted pose.
+
+### What this says about the two approaches
+
+The fragment search ranks poses by UMA interaction energy and nothing else. In that ranking,
+aromatic fragments average **-4.71 kcal/mol against -2.94 for aliphatic and polar** -- the
+potential sees the stacking and prefers it, unprompted. Shell 3's search selected tyrosine,
+phenylalanine and two tryptophans; the ordering search kept all four in the path; the fold put
+all four on the ligand; and the result is the strongest dispersion term in the project.
+
+| shell, chosen by fragment IE alone | aromatics selected | in contact | best dG from it |
+|---|---|---|---|
+| shell 3 | Tyr, Phe, Trp, Trp | all four | **-24.33** |
+| shell 2 | Phe, Trp | both | -16.25, -21.08 |
+| shell 1 | Trp | none | -13.71 |
+| BoltzGen `bg33_3` | -- | none | -11.86 |
+
+BoltzGen, equally unprompted, put alanine there. Two of its three structured designs contain no
+aromatic residue anywhere in the sequence, and `bg33_3`'s two tyrosines sit in the C-terminal
+strand pointing away from the ligand: the right residue in the wrong place. The specific cause is
+that `--inverse_fold_num_sequences` defaults to 1, so there was no sequence ensemble to select
+from -- which makes that flag, not "more designs", the first thing to change.
+
+The difference generalises past this ligand, in one direction. The fragment search has no
+parameter to change: the same ten fragments are scored against whatever ligand is given, and the
+ranking reorders itself -- a polar or hydrogen-bonding ligand would surface serine, aspartic and
+arginine by the same arithmetic that surfaced aromatics for a methoxycinnamate. BoltzGen has no
+equivalent. Its only residue controls are `--inverse_fold_avoid`, which is exclusionary and
+cannot prefer anything, and `residue_constraints` in the design spec, which is **per position**
+(`- position: 8` / `allowed: AGS`) -- so using it on a de novo binder means naming the positions
+that will land on the ligand, which is what the design is supposed to discover. Their own example
+warns that with few designs "blacklist constraints have a ~21% false-pass probability", because
+constraints are enforced statistically by the filtering stage rather than by construction.
+
+The transferability has its own limit, though: the library is **ten of the twenty residues** --
+`arginine lysine aspartic glutamic isoleucine leucine serine tryptophan tyrosine phenylalanine`.
+Absent are G A V M C P T N Q H, so no amides for a polar ligand's donor/acceptor pair, no
+histidine, and no methionine, whose thioether stacks on aromatic rings. Against a ligand whose
+best partners are asparagine or histidine, the physics cannot select them however well it scores
+what it has.
+
+Two further qualifications. The physics does not prefer aromatics as such; it prefers gas-phase
+interaction energy, in which **charged fragments rank highest at -10.79** and four of shell 1's
+eight selections are charged. That preference is the artifact the EGB term removes, while the
+aromatic preference survives desolvation -- so the scoring reaches the aromatics for a reason that
+holds and the charged residues for one that does not. And this is three shells and six structures,
+so aromatic count and dG could be confounded; what is not inferred is where the difference sits,
+which is the dispersion term.
+
 ## Scale is the limit, not the hardware
 
 BoltzGen's README asks for **10,000–60,000 intermediate designs** per target, and the paper's own
