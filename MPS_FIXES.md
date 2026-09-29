@@ -106,15 +106,26 @@ a silent change in precision rather than a fix.
 **`accelerator: gpu` already works.** Lightning resolves it to `MPSAccelerator` when CUDA is
 absent and MPS is available, so the shipped configs need no device override.
 
-**`bf16-mixed` runs, but the model's float32 guards do not.** There are around fifty
+**`bf16-mixed` runs, and it quietly produces wrong geometry.** There are around fifty
 `torch.autocast("cuda", enabled=False)` blocks protecting the triangle operations, attention
 softmaxes and confidence heads. Under an MPS autocast those disable *CUDA* autocast and have
 no effect, so those blocks run in bf16 rather than the float32 they were written to require.
-Nothing obviously wrong came out of the designs produced here, but if numerics look
-suspicious, run with `--config design trainer.precision=32`. A device-agnostic fix would be
-`torch.autocast(device_type=x.device.type, enabled=False)`, and
-[PR #258](https://github.com/HannesStark/boltzgen/pull/258) takes the other route: force
-float32 on CPU and MPS instead of bf16-mixed. Neither is in the patch here.
+
+This is not theoretical. The first eight designs made here came out with visibly broken
+ligands, and measuring the bond lengths against an MMFF conformer of the same SMILES gave
+mean errors of 0.05 to 0.24 A, up to 14 of 20 bonds wrong by more than 0.15 A, and one C-O
+bond stretched to 2.32 A against an ideal 1.44. Refolding the same backbones with
+`--config folding trainer.precision=32` brought that to 0.02-0.05 A mean with no bond wrong
+by more than 0.15 A -- the same range as Boltz-2's own output for this ligand. Nothing warned
+about any of it: the run completed, the confidences looked ordinary, and only the picture gave
+it away.
+
+So `precision=32` for the `design` and `folding` steps is part of running this on a Mac, not a
+fallback. `inverse_fold.yaml` already ships at 32. The patch here does not change the defaults,
+`run.sh` passes the overrides, and the two upstream routes are
+[PR #258](https://github.com/HannesStark/boltzgen/pull/258), which forces float32 on CPU and
+MPS, or fixing the guards themselves with
+`torch.autocast(device_type=x.device.type, enabled=False)`.
 
 **Checkpoints are swapped, not co-resident.** Each pipeline step is its own process and the
 two design checkpoints are loaded in turn at a switch point, so only one ~2 GB model is ever

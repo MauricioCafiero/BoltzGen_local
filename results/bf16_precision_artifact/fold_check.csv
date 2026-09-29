@@ -1,0 +1,9 @@
+name,closest_approach,contacts_under_cutoff,bound,enclosed_fraction,centroid_separation,peptide_rg,helical_fraction,beta_fraction,helical_hbonds,nonlocal_hbonds,ligand_heavy_atoms,engaged,wrapped_fraction,mean_ligand_distance,hints_applied,n_hints,hints_satisfied,hint_rate,worst_hint_miss,forced
+bg12,2.99,18,1,0.425,6.5,5.8,1.0,0.0,14,0,20,13,0.65,4.37,0,0,0,,0.0,
+bg15,3.39,15,1,0.375,6.5,7.2,0.923,0.0,18,0,20,14,0.7,4.15,0,0,0,,0.0,
+bg33_0,3.12,3,1,0.27,12.8,14.2,0.903,0.0,47,0,20,6,0.3,5.04,0,0,0,,0.0,
+bg33_1,3.33,23,1,0.385,16.7,14.8,0.968,0.0,42,0,20,13,0.65,4.52,0,0,0,,0.0,
+bg33_2,2.01,55,1,0.61,21.2,13.9,0.935,0.0,50,0,20,16,0.8,3.75,0,0,0,,0.0,
+bg33_3,2.23,40,1,0.575,7.7,9.2,0.903,0.065,43,0,20,11,0.55,4.52,0,0,0,,0.0,
+bg33_4,3.11,26,1,0.575,8.2,9.4,0.903,0.065,46,0,20,17,0.85,4.0,0,0,0,,0.0,
+bg33_5,2.99,24,1,0.48,8.4,9.3,0.097,0.645,8,12,20,17,0.85,3.96,0,0,0,,0.0,

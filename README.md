@@ -92,12 +92,31 @@ boltzgen run specs/octinoxate33.yaml \
   --output workbench/<name> \
   --protocol peptide-anything \
   --num_designs 6 \
-  --devices 1
+  --devices 1 \
+  --config design trainer.precision=32 \
+  --config folding trainer.precision=32
 ```
 
 **`--devices 1` is not optional.** Without it the CLI asks CUDA how many devices there are,
-gets zero, and configures the trainer with none. Everything else is stock BoltzGen, and its
-own README documents the rest.
+gets zero, and configures the trainer with none.
+
+**Neither is `precision=32`, and this one is silent.** The shipped configs use `bf16-mixed`,
+and the model's ~50 `torch.autocast("cuda", enabled=False)` blocks — which protect the
+triangle operations, the attention softmaxes and the confidence heads — have no effect under
+an MPS autocast, because they disable *CUDA* autocast. Those blocks then run in bf16 rather
+than the float32 they were written to require, and nothing warns you. The damage shows up in
+the ligand: refolding the same six backbones at bf16 and at float32 gives mean bond-length
+errors of 0.05–0.24 Å against 0.02–0.05 Å, with one C–O bond stretched to 2.32 Å against an
+ideal 1.44. Everything in this repository was regenerated at float32 after that was found;
+[FEASIBILITY.md](FEASIBILITY.md) has the numbers.
+
+```sh
+  --config design trainer.precision=32 \
+  --config folding trainer.precision=32
+```
+
+`inverse_fold.yaml` already ships at `precision: 32`, so only those two steps need it.
+Everything else is stock BoltzGen, and its own README documents the rest.
 
 `./run.sh <spec> <output-name> [num_designs]` wraps that with a log, `--reuse`, and a
 `caffeinate` that dies with the script, since a multi-hour run otherwise stops when the
@@ -152,14 +171,28 @@ specs/
 footprint, and a comparison of eight designs against the 38 folds in `peptidebuilder` on the
 cheap geometric metrics.
 
-`bg_designs.pdb` holds all eight designs in one multi-model PDB, superposed on the ligand and
-ordered by enclosure, with the sequence and the fold-check numbers in `REMARK` lines above
-each model. The ligand is flexible and each fold has its own conformer, so the superposition
-is 1.5 to 2.1 Å rather than exact.
+The short version: all eight designs are less enclosed than `peptidebuilder`'s own shuffled
+null control, five of the eight collapsed to near poly-alanine at the inverse-folding step
+(which defaults to one sequence per backbone, so there was nothing to select among), and one
+— `bg33_3`, `AIVLKNISEEEAAEIARKLGGGIEKVGDSYIVY` — wraps all twenty ligand heavy atoms with
+real tertiary structure and is worth a second look.
+
+`bg_designs.pdb` holds all eight in one multi-model PDB, superposed on the ligand and ordered
+by enclosure, with the sequence and the fold-check numbers in `REMARK` lines above each model
+and `CONECT` records for the ligand so a viewer does not have to guess its bonds. The ligand
+is flexible and each fold has its own conformer, so the superposition is 0.9 to 2.1 Å rather
+than exact.
 
 `results/` keeps the eight refolded complexes as BoltzGen wrote them — with the per-residue
 confidences the PDB bundle drops — beside the `fold_check.csv` those numbers come from.
-Whole pipeline output goes to `workbench/`, which is not committed.
+`results/bf16_precision_artifact/` holds the first, discarded set made at `bf16-mixed`, kept
+because it is the evidence for the precision problem above. Whole pipeline output goes to
+`workbench/`, which is not committed.
+
+`tools/` has the three small programs this needed: `bg_to_boltz_cif.py` converts a BoltzGen
+cif into the column layout `peptidebuilder` reads, `lig_geom.py` measures a predicted
+ligand's bond lengths against an MMFF conformer of its SMILES, and `bg_bundle_pdb.py` builds
+the multi-model bundle. `tools/metrics.sh` runs all three against a finished run.
 
 ## Reusing structures between this and peptidebuilder
 

@@ -9,20 +9,19 @@ BoltzGen 0.3.2 from `github.com/HannesStark/boltzgen`, patched clone in `src_bol
 The whole pipeline — design, inverse folding, refolding, analysis, filtering — completed on MPS for
 the octinoxate analogue used throughout `peptidebuilder`, with the ligand as the *only* target.
 
-| step | time | note |
+| step | 33-residue run, 6 designs | 12-21-residue run, 2 designs |
 |---|---|---|
-| `design` | **89.7 s / 2 designs** | 500 diffusion steps, 3 recycles, plus one 2 GB checkpoint swap |
-| `inverse_folding` | 5.7 s / 2 | 12.6 MB model; essentially free |
-| `folding` (Boltz-2) | 81.3 s / 2 | ~40 s per complex |
-| `analysis` | 20.5 s | |
-| `filtering` | 7.0 s | |
+| `design` | 236.8 s | 85.3 s |
+| `inverse_folding` | 15.6 s | 15.7 s |
+| `folding` (Boltz-2) | 305.5 s | 103.5 s |
+| `analysis` | 20.1 s | 12.0 s |
+| `filtering` | 7.4 s | 6.9 s |
+| **per design, end to end** | **97.6 s** | **111.7 s** |
 
-About **100 s per design end to end** for a 12–15-residue peptide against a 20-heavy-atom ligand
-(~35 tokens). Peak memory left 23% of the machine free — the pipeline runs each step as a separate
-process and swaps the two design checkpoints in place, so only one ~2 GB model is ever resident.
-
-Disk: ~6 GB of checkpoints in `~/.cache/huggingface` (2 × 1.93 GB design, 2.09 GB folding,
-2.06 GB affinity, 12.6 MB inverse folding) + 391 MB `mols.zip` + 1.3 GB venv.
+Those are at `precision=32`, which is what this has to run at (see the fourth fix below). The
+same pipeline at the shipped `bf16-mixed` was about 15% faster and produced wrong geometry.
+Peak memory left 23% of an 8 GB machine free. The checkpoints are about 6 GB in `~/.cache`,
+plus 1.3 GB of virtualenv.
 
 ## Four things had to be fixed
 
@@ -53,55 +52,81 @@ two designs produced, but `--config design trainer.precision=32` is the fallback
 
 ## What it produced
 
-Design spec: designed chain `12..21`, target = the ligand alone, SMILES
-`CCCC[C@H](CC)OC(=O)/C=C/c1ccc(OC)cc1` (the C17H24O3 analogue, taken from
-`runs/octinoxate/ligand.xyz`), protocol `peptide-anything`.
+Design specs: a designed chain of `12..21` or `33..33` residues, target = the ligand alone,
+SMILES `CCCC[C@H](CC)OC(=O)/C=C/c1ccc(OC)cc1` (the C17H24O3 analogue, taken from
+`runs/octinoxate/ligand.xyz`), protocol `peptide-anything`. Eight designs, all at float32.
 
-| | design model output | after inverse folding | refold |
+Each refold was put through `peptidebuilder`'s own `check_fold.py`, after converting it into
+the column layout Boltz-2 writes -- BoltzGen's `_atom_site` loop carries an extra
+`label_entity_id`, which `parse_cif` reads positionally and would take as the residue number.
+`tools/metrics.sh` does that end to end.
+
+| structure | len | encl | wrap | eng | sep | Rg | sep/Rg | cont | closest | hel | nonlocal | sequence |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `bg33_4` | 33 | 0.59 | 0.95 | 19/20 | 6.3 | 9.5 | 0.66 | 18 | 3.16 | 0.90 | 0 | `GAAAARALAVVLAAAALAAGLITAEEALAAIAA` |
+| `bg33_2` | 33 | 0.58 | 0.75 | 15/20 | 5.2 | 14.5 | 0.36 | 12 | 3.40 | 0.97 | 0 | `GAAAAAAAIAAAAAAAAAAAAAAAAAAAAALAA` |
+| `bg33_5` | 33 | 0.56 | 0.50 | 10/20 | 7.7 | 9.2 | 0.84 | 7 | 3.35 | 0.65 | 0 | `MLTLEELIELARQKGKGARGEPLSLEEMRRIAA` |
+| **`bg33_3`** | 33 | 0.48 | **1.00** | **20/20** | 8.6 | 8.5 | 1.01 | 19 | 2.69 | **0.32** | **6** | `AIVLKNISEEEAAEIARKLGGGIEKVGDSYIVY` |
+| `bg33_1` | 33 | 0.38 | 0.75 | 15/20 | 17.3 | 14.4 | 1.20 | 32 | **2.34** | 1.00 | 0 | `GAAAVAAALAAAGVAAVAAVAAAAALAALLAAA` |
+| `bgA` | 13 | 0.35 | 0.75 | 15/20 | 6.8 | 6.2 | 1.10 | 17 | 3.32 | 1.00 | 0 | `AAAAAAAALAALA` |
+| `bgB` | 20 | 0.34 | 0.60 | 12/20 | 14.8 | 9.2 | 1.61 | 13 | 3.38 | 1.00 | 0 | `AAAAAAVAAGAAATLAALLL` |
+| `bg33_0` | 33 | 0.28 | 0.55 | 11/20 | 19.9 | 14.6 | 1.36 | 9 | 3.50 | 0.97 | 0 | `AAAAAAAAAAAAVAAAVAAAAAAAAAAAALALA` |
+
+Against the 38 folds in `runs/octinoxate/boltz/fold_check*.csv`:
+
+| | BoltzGen (n=8) | this repo, 38 folds | the shuffled null |
 |---|---|---|---|
-| 1 | `GLLEAIIALLLS` (6/12 residues within 4.5 Å of the ligand, 12/20 ligand atoms contacted) | `SLAALALAAALA` | 5/12 residues, 13/20 ligand atoms, backbone RMSD to design **0.38 Å** |
-| 2 | `GPAELIAAAVLLLLS` (7/15, 14/20) | `MVAGLLAAALGILLA` | 6/15 residues, 14/20 ligand atoms, RMSD **0.51 Å** |
+| `enclosed` | 0.28-0.59 | 0.36-0.96, median 0.66 | 0.74 |
+| `wrapped` | 0.50-1.00 | 0.40-1.00 | 0.75 |
+| `engaged` | 10-20 / 20 | 8-20 / 20 | 15/20 |
+| `contacts_under_cutoff` | 7-32 | 5-67, median 22 | 22 |
+| `centroid_sep` / `Rg` | 0.36-1.61 | 0.25-1.53 | 0.96 |
 
-Both are 83–87% helix, bury ~170 Å² of ligand surface, and make 0–1 hydrogen bonds — a helix laid
-along a lipophilic ester, which is chemically reasonable for this ligand. `design_to_target_iptm`
-is 0.39–0.44, which is low.
+**Every one of the eight is less enclosed than the shuffled null control**, and the best of them
+(0.59) is well short of this repository's best (0.96). Six of eight have the ligand at or outside
+the peptide surface. `bg33_1` has a heavy-atom contact at 2.34 A, under the 2.6 A that this
+repository treats as a broken interface.
 
-The number worth noticing is `filter_rmsd`: **0.38 and 0.51 A** between the designed backbone and
-its own refold. Some of that is self-agreement -- the refolder shares training and weights with the
-designer -- and it is *not* the measure this repository is trying to win: the README states that
-shell reproduction is the wrong question, since `s3_orig_f12` is the strongest binder measured and
-reproduces none of its twelve designed positions. What the repository delivers is pairwise contact
-options, judged over a trajectory.
+**Five of the eight came back near poly-alanine**, one of them 29 alanines of 33. That is the
+inverse-folding step collapsing exactly as ESM2's argmax collapses to leucine, and it is the first
+thing to fix: `--inverse_fold_num_sequences` defaults to 1, so there was nothing to select among.
 
-So the designs were put through `check_fold.py` itself, converting each refold into the column
-layout Boltz-2 writes (BoltzGen's `_atom_site` loop carries an extra `label_entity_id`, which
-`parse_cif` would read as the residue number). Six further designs were generated at `33..33` to
-match this repository's length. Against the 38 folds in `runs/octinoxate/boltz/fold_check*.csv`:
+Two structures are not like that, and both come from the float32 regeneration rather than the
+first bf16 attempt:
 
-| | BoltzGen, 33-mers (n=6) | this repo, 38 folds | the shuffled null |
+- **`bg33_3`**, `AIVLKNISEEEAAEIARKLGGGIEKVGDSYIVY` -- 32% helical with **6 non-local backbone
+  hydrogen bonds**, Rg 8.5 A, wrapping **all twenty** ligand heavy atoms across 19 contacts. It is
+  the only fold in the set with real tertiary structure, and the only one that engages the whole
+  ligand. Its closest contact, 2.69 A, is just above the clash threshold.
+- **`bg33_5`**, `MLTLEELIELARQKGKGARGEPLSLEEMRRIAA` -- 65% helical, Rg 9.2 A, and reads like a
+  designed helix-loop-helix. It wraps only half the ligand, so it is interesting as a sequence
+  rather than as a complex.
+
+**The comparison is only fair as "what BoltzGen gives at laptop scale".** Eight designs is the
+regime its own README warns against; the filtering stage that does the work had nothing to filter,
+and the published results come from 10,000-20,000. Note also that this repository's folds were
+given contact constraints while these are unconstrained controls.
+
+### The bf16 detour, kept as evidence
+
+The first eight designs were made at the shipped `bf16-mixed` and their ligands came out visibly
+broken. Bond lengths against an MMFF conformer of the same SMILES:
+
+| | mean error | worst | bonds off >0.15 A |
 |---|---|---|---|
-| `enclosed` | 0.27-0.61 | 0.36-0.96, median 0.66 | 0.74 |
-| `wrapped` | 0.30-0.85 | 0.40-1.00 | 0.75 |
-| `engaged` | 6-17 / 20 | 8-20 / 20 | 15/20 |
-| `contacts_under_cutoff` | 3-55 | 5-67, median 22 | 22 |
-| `centroid_sep` / `Rg` | 0.84-1.53 | 0.25-1.53 | 0.96 |
+| bf16-mixed, 8 folds | 0.053-0.244 A | **0.88 A** | 0-14 of 20 |
+| float32, same 6 backbones refolded | 0.021-0.047 A | 0.13 A | **0 of 20** |
+| float32, regenerated designs | 0.023-0.070 A | 0.18 A | 0-1 of 20 |
+| Boltz-2 in this repo, 8 folds | 0.012-0.025 A | 0.07 A | 0 of 20 |
 
-**Every one of the six is less enclosed than the shuffled null control**, and all six have the
-ligand at or outside the peptide surface. Two carry heavy-atom contacts under the 2.6 A that this
-repository treats as a broken interface (2.01 and 2.23 A). Four of the six came back near
-poly-alanine -- one is 30 alanines of 33 -- which is the inverse-folding step collapsing exactly as
-ESM2's argmax collapses to leucine, and is fixable by sampling more sequences per backbone
-(`--inverse_fold_num_sequences`).
+One C-O bond was stretched to 2.32 A against an ideal of 1.44, which is why a viewer drew the
+molecule in pieces. Aromatic bonds went the other way, compressed to 0.93-1.08 A against 1.39.
+Rings stayed planar throughout, so it is bond lengths specifically. Nothing warned: the runs
+completed and the confidences looked ordinary.
 
-The exception is worth keeping: `bg33_5`, `MVAPGANGNTVVVNHEAGKVEILDKDGKVVDVR`, is **10% helical with
-12 non-local backbone hydrogen bonds** -- more tertiary structure than any fold in this repository
-except `s2_orig_f12`'s 11 -- at Rg 9.3 A, 0.85 wrapped, 17 of 20 ligand atoms engaged and no clash.
-One structure out of six, and the only one in either set that is neither a helix nor an unfolded
-chain.
-
-**The comparison is only fair as "what BoltzGen gives at laptop scale".** Six designs is the regime
-its own README warns against; the filtering stage that does the work had nothing to filter, and the
-published results come from 10,000-20,000.
+The bf16 structures are kept in `results/bf16_precision_artifact/` because they are the evidence
+for that, and `tools/lig_geom.py` is the check -- worth running on any predicted complex before
+its geometry is trusted.
 
 ## Scale is the limit, not the hardware
 
@@ -159,8 +184,14 @@ cd ~/python_mac/boltzgen_local
 source .venv/bin/activate
 export PYTORCH_ENABLE_MPS_FALLBACK=1
 boltzgen run specs/octinoxate.yaml --output workbench/<name> \
-  --protocol peptide-anything --num_designs 2 --devices 1
+  --protocol peptide-anything --num_designs 2 --devices 1 \
+  --config design trainer.precision=32 \
+  --config folding trainer.precision=32
 ```
+
+or `./run.sh specs/octinoxate33.yaml <name> 6`, which passes those and logs the run. Then
+`tools/metrics.sh scratch/<name>_check workbench/<name>/intermediate_designs_inverse_folded/refold_cif/*.cif`
+reproduces every number in this file.
 
 `--reuse` restarts an interrupted run without losing work. `--steps <names>` runs part of the
 pipeline; step names are `design inverse_folding design_folding folding affinity analysis filtering`

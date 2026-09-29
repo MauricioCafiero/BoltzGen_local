@@ -25,12 +25,18 @@ caffeinate -w $$ &
 
 {
     date
+    # precision=32 is not optional on MPS. The shipped bf16-mixed leaves the model's
+    # ~50 torch.autocast("cuda", enabled=False) float32 guards inert under an MPS
+    # autocast, and the ligand comes out with bond lengths wrong by up to 0.9 A --
+    # measured, see FEASIBILITY.md.
     boltzgen run $SPEC \
         --output workbench/$NAME \
         --protocol $PROTOCOL \
         --num_designs $N \
         --devices 1 \
-        --reuse
+        --reuse \
+        --config design trainer.precision=32 \
+        --config folding trainer.precision=32
     echo "EXIT=$?"
     date
 } 2>&1 | tee $NAME.log
