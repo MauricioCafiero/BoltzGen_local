@@ -177,11 +177,13 @@ null control, five of the eight collapsed to near poly-alanine at the inverse-fo
 — `bg33_3`, `AIVLKNISEEEAAEIARKLGGGIEKVGDSYIVY` — wraps all twenty ligand heavy atoms with
 real tertiary structure and is worth a second look.
 
-`bg_designs.pdb` holds all eight in one multi-model PDB, superposed on the ligand and ordered
-by enclosure, with the sequence and the fold-check numbers in `REMARK` lines above each model
-and `CONECT` records for the ligand so a viewer does not have to guess its bonds. The ligand
-is flexible and each fold has its own conformer, so the superposition is 0.9 to 2.1 Å rather
-than exact.
+`figures/bg_designs.pdb` holds all eight in one multi-model PDB, superposed on the ligand and
+ordered by enclosure, with the sequence and the fold-check numbers in `REMARK` lines above each
+model and `CONECT` records for the ligand so a viewer does not have to guess its bonds. The
+ligand is flexible and each fold has its own conformer, so the superposition is 0.9 to 2.1 Å
+rather than exact. `md/figures/bg_md_endpoints.pdb` is the same idea for the structures after
+20 ns of dynamics: the medoid frame of each run's final 2 ns, again superposed on the ligand.
+Structures for viewing go in `figures/` and `md/figures/`, matching `peptidebuilder`'s layout.
 
 `results/` keeps the eight refolded complexes as BoltzGen wrote them — with the per-residue
 confidences the PDB bundle drops — beside the `fold_check.csv` those numbers come from.

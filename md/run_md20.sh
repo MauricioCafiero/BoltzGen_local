@@ -14,6 +14,7 @@ OMD=~/miniforge3/envs/openmm-md/bin/omd
 PY=~/miniforge3/envs/openmm-md/bin/python
 REPO=/Users/cafierom/python_mac/peptidebuilder
 STEPS=10000000           # 20 ns at 2 fs
+ROOT=$PWD              # absolute, so MM/GBSA can be run from inside its own output dir
 caffeinate -w $$ &
 date
 
@@ -37,9 +38,11 @@ for n in bg33_3 bg33_4; do
     fi
 
     if [[ ! -f $P/mmgbsa/FINAL_RESULTS_MMPBSA.dat ]]; then
-        $OMD mmgbsa --protein $M/protein_fixed.pdb --ligand $M/ligand_prepped.sdf \
-                    --traj $P/traj_wrapped.xtc --topology $P/traj_wrapped.pdb \
-                    --out-dir $P/mmgbsa --no-auto-cofactors --run
+        # from inside the output dir: MMPBSA.py scatters scratch into the working directory
+        ( cd $P && $OMD mmgbsa --protein $ROOT/$M/protein_fixed.pdb \
+                               --ligand $ROOT/$M/ligand_prepped.sdf \
+                               --traj traj_wrapped.xtc --topology traj_wrapped.pdb \
+                               --out-dir mmgbsa --no-auto-cofactors --run )
         echo "MMGBSA_EXIT[$n]=$?"
         date
     fi
@@ -62,9 +65,10 @@ print(f'kept {len(keep)} of {len(t)} frames (leading $ns ns)')
 "
         fi
         $OMD analyze --traj $W/traj.dcd --topology $M/system/complex.pdb --out-dir $W
-        $OMD mmgbsa --protein $M/protein_fixed.pdb --ligand $M/ligand_prepped.sdf \
-                    --traj $W/traj_wrapped.xtc --topology $W/traj_wrapped.pdb \
-                    --out-dir $W/mmgbsa --no-auto-cofactors --run
+        ( cd $W && $OMD mmgbsa --protein $ROOT/$M/protein_fixed.pdb \
+                               --ligand $ROOT/$M/ligand_prepped.sdf \
+                               --traj traj_wrapped.xtc --topology traj_wrapped.pdb \
+                               --out-dir mmgbsa --no-auto-cofactors --run )
         echo "WINDOW_EXIT[$n:${ns}ns]=$?"
         date
     done

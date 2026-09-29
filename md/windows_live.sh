@@ -14,6 +14,7 @@
 cd /Users/cafierom/python_mac/boltzgen_local
 OMD=~/miniforge3/envs/openmm-md/bin/omd
 PY=~/miniforge3/envs/openmm-md/bin/python
+ROOT=$PWD              # absolute, so MM/GBSA can be run from inside its own output dir
 
 n=${1:?usage: windows_live.sh <structure> [total_ns]}
 TOTAL=${2:-20}
@@ -39,9 +40,13 @@ for ns in 5 10 15; do
     echo "[$ns ns] starting at $(date), step $step, $(memory_pressure | tail -1)"
     $PY md/window_live.py $P/traj.dcd $M/system/complex.pdb $W/traj.dcd $ns $P/energy.csv || continue
     $OMD analyze --traj $W/traj.dcd --topology $M/system/complex.pdb --out-dir $W
-    $OMD mmgbsa --protein $M/protein_fixed.pdb --ligand $M/ligand_prepped.sdf \
-                --traj $W/traj_wrapped.xtc --topology $W/traj_wrapped.pdb \
-                --out-dir $W/mmgbsa --no-auto-cofactors --run
+    # MMPBSA.py writes its scratch into the *working* directory, not --out-dir: one 20 ns
+    # window left a 6 GB reference.frc and a dozen _MMPBSA_* files in the repo root. Running
+    # it from inside the window's own directory keeps that where it belongs.
+    ( cd $W && $OMD mmgbsa --protein $ROOT/$M/protein_fixed.pdb \
+                           --ligand $ROOT/$M/ligand_prepped.sdf \
+                           --traj traj_wrapped.xtc --topology traj_wrapped.pdb \
+                           --out-dir mmgbsa --no-auto-cofactors --run )
     echo "[$ns ns] done at $(date), $(memory_pressure | tail -1)"
     grep -A3 "DELTA TOTAL" $W/mmgbsa/FINAL_RESULTS_MMPBSA.dat 2>/dev/null | head -4
 done
