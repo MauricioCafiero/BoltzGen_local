@@ -293,8 +293,10 @@ the ester and tail, `I15 K18 L19` on the ring and methoxy. A gap of 10–17 resi
 segments holding opposite ends of the ligand is the non-adjacent pairwise engagement
 `pair_contacts.py` argues is the informative content.
 
-`bg33_4` reaches 19 of 20 atoms the other way, from a 90% helix with no non-local hydrogen bonds
-and contacts spread from residue 5 to residue 30 — the ligand lies along the helix.
+`bg33_4` reaches 19 of 20 atoms the other way. It is a helical hairpin (see the architecture
+table below), and its contacts fall on both arms: `A5 L8 A9 L12 A13 A16` on the first and
+`I22 A30` on the second, with the methoxy end of the ligand touched from both sides. So the
+ligand lies in the crook between the two arms rather than along a single helix.
 
 `bg33_5` leaves the methoxyphenyl head entirely uncontacted, engages 10 of 20 atoms across 10
 residues, and puts `K14`, `K16` and `R30` against a lipophile — the mode that pays no desolvation
@@ -413,8 +415,8 @@ Medoid frames of the final 2 ns, rendered from `md/figures/`. Peptide and ligand
 | 0.59 enclosed, 0.95 wrapped, no aromatic residue anywhere in the sequence | 0.48 enclosed, **1.00 wrapped**, 20 of 20 ligand atoms engaged |
 
 The pair is the argument of this section: the one that wraps the whole ligand and has the real
-tertiary structure is the one that lets go, and the flat helix that contacts slightly less holds on
-and binds 7.8 kcal/mol better.
+tertiary structure is the one that lets go, and the hairpin that contacts slightly less holds on and
+binds 7.8 kcal/mol better.
 
 `md/figures/bg_md_endpoints.pdb` holds both structures after the run — the medoid frame of each
 one's final 2 ns, a real frame nearest the window mean rather than an average, superposed on the
@@ -443,9 +445,10 @@ ligand — the right residue in the wrong place.
 
 **But aromatic contact is not what predicts binding here, and the two BoltzGen structures are what
 show it.** Both have zero aromatics on the ligand and they come third and last. `bg33_4` reaches
-VDWAALS −24.49, second only to `s3_orig_f12`, by packing a long amphipathic helix along the ligand
-across 25 residues of contact span: dispersion that good is reachable without a single aromatic
-ring. What the aromatics explain is `s3_orig_f12`'s −34.41, and — by their absence alongside a
+VDWAALS −24.49, second only to `s3_orig_f12`, by closing a helical hairpin around the ligand: six
+contact residues on one arm, two on the other, and the methoxy end held between them. Dispersion
+that good is reachable without a single aromatic ring, from alanine, leucine and valine packed on
+both faces. What the aromatics explain is `s3_orig_f12`'s −34.41, and — by their absence alongside a
 seven-residue contact set — `bg33_3`'s −14.15. The statement that survives is about the dispersion
 term itself: how much hydrophobic surface is packed against the ligand and held there, which
 residence measures independently.
