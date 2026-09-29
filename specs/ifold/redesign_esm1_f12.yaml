@@ -1,0 +1,15 @@
+# Redesign the sequence of an already-folded peptide/octinoxate complex from
+# the peptidebuilder repo, keeping the backbone and the ligand pose fixed.
+entities:
+  - file:
+      path: esm1_f12_model_0.cif
+      include:
+        - chain:
+            id: A
+        - chain:
+            id: B
+      design:
+        - chain:
+            id: A
+            res_index: 1..33
+      structure_groups: "all"

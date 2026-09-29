@@ -1,0 +1,8 @@
+# BoltzGen's own source: fetched and patched by setup.sh, never committed here
+src_boltzgen/
+
+.venv/
+workbench/
+*.log
+__pycache__/
+scratch/

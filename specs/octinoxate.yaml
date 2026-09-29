@@ -1,0 +1,10 @@
+# Design a peptide binder for the octinoxate analogue used throughout the
+# peptidebuilder repo (C17H24O3; SMILES perceived from runs/octinoxate/ligand.xyz).
+# Target is the ligand alone - no protein target.
+entities:
+  - protein:
+      id: A
+      sequence: 12..21
+  - ligand:
+      id: B
+      smiles: "CCCC[C@H](CC)OC(=O)/C=C/c1ccc(OC)cc1"

@@ -1,0 +1,8 @@
+# Length-matched to the peptidebuilder designs: 33 residues, same ligand-only target.
+entities:
+  - protein:
+      id: A
+      sequence: 33..33
+  - ligand:
+      id: B
+      smiles: "CCCC[C@H](CC)OC(=O)/C=C/c1ccc(OC)cc1"

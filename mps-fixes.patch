@@ -1,0 +1,114 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 6e32f4b..7200e76 100755
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -33,10 +33,6 @@ dependencies = [
+     "einx",
+     "einops",
+     "mashumaro",
+-    "nvidia-ml-py>=12.535.133",
+-    "cuequivariance_ops_cu12>=0.5.0",
+-    "cuequivariance_ops_torch_cu12>=0.5.0",
+-    "cuequivariance_torch>=0.5.0",
+     "huggingface_hub",
+     "biopython", 
+ ]
+diff --git a/src/boltzgen/cli/boltzgen.py b/src/boltzgen/cli/boltzgen.py
+index 4cf6c6c..4d6b2fa 100644
+--- a/src/boltzgen/cli/boltzgen.py
++++ b/src/boltzgen/cli/boltzgen.py
+@@ -918,7 +918,9 @@ class BinderDesignPipeline:
+             )
+ 
+         # Handle use_kernels argument
+-        device_capability = torch.cuda.get_device_capability()
++        device_capability = (
++            torch.cuda.get_device_capability() if torch.cuda.is_available() else (0, 0)
++        )
+         use_kernels = None
+         if args.use_kernels == "auto":
+             use_kernels = device_capability[0] >= 8
+@@ -939,7 +941,7 @@ class BinderDesignPipeline:
+         )
+ 
+         devices = (
+-            args.devices if args.devices is not None else torch.cuda.device_count()
++            args.devices if args.devices is not None else max(1, torch.cuda.device_count())
+         )
+         print(f"Using {devices} devices")
+ 
+diff --git a/src/boltzgen/data/mol.py b/src/boltzgen/data/mol.py
+index 5fbe365..36139e1 100755
+--- a/src/boltzgen/data/mol.py
++++ b/src/boltzgen/data/mol.py
+@@ -8,9 +8,16 @@ import zipfile
+ 
+ import numpy as np
+ import torch
++from rdkit import Chem
+ from rdkit.Chem import Mol, AllChem
+ from tqdm import tqdm
+ 
++# RDKit does not pickle atom properties by default, and every molecule here carries the
++# per-atom "name" the featurizer looks up. Where DataLoader workers start with "spawn"
++# rather than "fork" -- the default on macOS -- the dataset is pickled into each worker
++# and those names are silently lost, so the first batch dies with KeyError: 'name'.
++Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AllProps)
++
+ from boltzgen.data import const
+ from boltzgen.data.pad import pad_dim
+ from boltzgen.model.loss.confidence import lddt_dist
+diff --git a/src/boltzgen/task/predict/data_from_generated.py b/src/boltzgen/task/predict/data_from_generated.py
+index 4947e48..5a5019d 100755
+--- a/src/boltzgen/task/predict/data_from_generated.py
++++ b/src/boltzgen/task/predict/data_from_generated.py
+@@ -877,6 +877,9 @@ class FromGeneratedDataModule(pl.LightningDataModule):
+                 "tokenized",
+                 "data_sample_idx",
+             ]:
++                if getattr(batch[key], "dtype", None) == torch.float64:
++                    # MPS has no float64; inference runs in float32 anyway
++                    batch[key] = batch[key].float()
+                 batch[key] = batch[key].to(device)
+ 
+         return batch
+diff --git a/src/boltzgen/task/predict/data_from_yaml.py b/src/boltzgen/task/predict/data_from_yaml.py
+index 77fbf84..655bba3 100755
+--- a/src/boltzgen/task/predict/data_from_yaml.py
++++ b/src/boltzgen/task/predict/data_from_yaml.py
+@@ -445,5 +445,8 @@ class FromYamlDataModule(pl.LightningDataModule):
+                 "extra_mols",
+                 "data_sample_idx",
+             ]:
++                if getattr(batch[key], "dtype", None) == torch.float64:
++                    # MPS has no float64; inference runs in float32 anyway
++                    batch[key] = batch[key].float()
+                 batch[key] = batch[key].to(device)
+         return batch
+diff --git a/src/boltzgen/task/predict/data_ligands.py b/src/boltzgen/task/predict/data_ligands.py
+index 4b1fe4d..2205d6c 100755
+--- a/src/boltzgen/task/predict/data_ligands.py
++++ b/src/boltzgen/task/predict/data_ligands.py
+@@ -406,5 +406,8 @@ class LigandBinderDataModule(pl.LightningDataModule):
+                 "extra_mols",
+                 "data_sample_idx",
+             ]:
++                if getattr(batch[key], "dtype", None) == torch.float64:
++                    # MPS has no float64; inference runs in float32 anyway
++                    batch[key] = batch[key].float()
+                 batch[key] = batch[key].to(device)
+         return batch
+diff --git a/src/boltzgen/task/predict/data_protein_binder.py b/src/boltzgen/task/predict/data_protein_binder.py
+index 08b8884..8e14490 100755
+--- a/src/boltzgen/task/predict/data_protein_binder.py
++++ b/src/boltzgen/task/predict/data_protein_binder.py
+@@ -584,6 +584,9 @@ class ProteinBinderDataModule(pl.LightningDataModule):
+                 "extra_mols",
+                 "data_sample_idx",
+             ]:
++                if getattr(batch[key], "dtype", None) == torch.float64:
++                    # MPS has no float64; inference runs in float32 anyway
++                    batch[key] = batch[key].float()
+                 batch[key] = batch[key].to(device)
+         return batch
+ 
