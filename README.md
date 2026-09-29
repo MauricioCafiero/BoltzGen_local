@@ -16,6 +16,28 @@ Verified on macOS 26.5, 8 GB unified memory, Python 3.12, torch 2.14: `design`,
 `inverse_folding`, `folding`, `analysis` and `filtering` all complete for a designed peptide
 against a small-molecule target given as SMILES.
 
+## Prior art, and where to look when something else breaks
+
+The four fixes here were worked out from scratch, and then found to duplicate
+[PR #145](https://github.com/HannesStark/boltzgen/pull/145), which @fnachon opened in January
+2026 and still maintains. It covers all four — including the same diagnosis of the RDKit
+pickle problem, reached independently — and more besides: `pin_memory` on MPS,
+`persistent_workers`, the autocast device type ([#258](https://github.com/HannesStark/boltzgen/pull/258),
+which forces float32 on CPU and MPS rather than bf16-mixed), MPS SVD
+([#261](https://github.com/HannesStark/boltzgen/pull/261)) and the macOS libomp conflict
+([#260](https://github.com/HannesStark/boltzgen/pull/260)). Two of its choices are better than
+ours: it keeps the CUDA dependencies behind `; platform_system != 'Darwin'` environment
+markers instead of deleting them, and it gates the float64 cast on
+`torch.backends.mps.is_available()` instead of casting unconditionally.
+
+We keep the patch here because it is four changes we understand and can re-derive. But
+**[github.com/fnachon/boltzgen](https://github.com/fnachon/boltzgen)** — `main` at `628506be5`,
+11 commits ahead of upstream and not behind — is the first place to look when something else
+breaks on a Mac, and [issue #146](https://github.com/HannesStark/boltzgen/issues/146) is the
+thread where Mac users compare notes. The benchmarks there are all `1g13prot.yaml`, a
+~200-token protein target, so they are not comparable with the ~35-token peptide-and-ligand
+timings in [FEASIBILITY.md](FEASIBILITY.md).
+
 ---
 
 ## Install

@@ -1,15 +1,22 @@
 # Running BoltzGen on Apple silicon (MPS)
 
-BoltzGen ships CUDA-only and assumes a CUDA device exists. This fork changes seven files, 23
-inserted lines and 6 removed, so that the pipeline runs on Apple silicon through PyTorch's
-MPS backend.
-Nothing here is Mac-specific in effect: three of the four changes are bugs that would bite
-any non-CUDA host, and one is a bug that bites any host whose multiprocessing default is
-`spawn`.
+BoltzGen ships CUDA-only and assumes a CUDA device exists. The patch in `mps-fixes.patch`
+changes seven files, 23 inserted lines and 6 removed, so that the pipeline runs on Apple
+silicon through PyTorch's MPS backend. Nothing here is Mac-specific in effect: three of the
+four changes are bugs that would bite any non-CUDA host, and one is a bug that bites any host
+whose multiprocessing default is `spawn`.
 
 Verified on macOS 26.5, 8 GB unified memory, torch 2.14, Python 3.12: `design`,
 `inverse_folding`, `folding`, `analysis` and `filtering` all complete, for a designed
 peptide against a small-molecule target given as SMILES.
+
+> **This duplicates [PR #145](https://github.com/HannesStark/boltzgen/pull/145).** The changes
+> were worked out here from the tracebacks, and only afterwards found to match a pull request
+> @fnachon opened in January 2026 and still maintains, whose fork is at
+> [github.com/fnachon/boltzgen](https://github.com/fnachon/boltzgen). It reaches the same four
+> places and goes further. The notes below say where its version differs and why it is
+> generally the better one; `README.md` says why this copy is kept anyway. Nothing here is
+> offered as novel.
 
 ## What was changed
 
@@ -25,8 +32,10 @@ This costs nothing on a machine without CUDA: the cuEquivariance import in
 which requires device capability >= 8. A CUDA user who wants the kernels installs the three
 packages directly.
 
-A cleaner upstream form of this change would be a `[project.optional-dependencies]` extra —
-`pip install boltzgen[cuda]` — rather than deleting the lines.
+**PR #145 does this better:** it keeps all four lines and appends
+`; platform_system != 'Darwin'` to each, so a Linux install is untouched and only macOS skips
+them. It does the same for the `numpy==2.0.2` and `numba==0.61.0` pins. Deleting the lines, as
+here, also drops the kernels for any CUDA user who installs from this patched tree.
 
 ### 2. `src/boltzgen/cli/boltzgen.py` — two unconditional CUDA calls
 
@@ -38,6 +47,12 @@ devices = args.devices if args.devices is not None else torch.cuda.device_count(
 The first raises, and the second configures the trainer with zero devices. Both are guarded:
 capability falls back to `(0, 0)`, which makes `--use_kernels auto` resolve to `False`, and
 the device count floors at 1.
+
+**PR #145 is the same change.** It also reports the crash this fixes as
+[issue #187](https://github.com/HannesStark/boltzgen/issues/187), `AssertionError: Torch not
+compiled with CUDA enabled`, which is the same bug on a CPU-only Linux host. Note that with
+either version `--devices 1` stops being strictly necessary; it is still in this repository's
+run commands because the runs recorded here were made before the guard went in.
 
 ### 3. `src/boltzgen/data/mol.py` — RDKit atom properties lost to `spawn`
 
@@ -62,6 +77,12 @@ Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AllProps)
 
 Without it, every step needs `num_workers=0` to run.
 
+**PR #145 reached the same diagnosis and fixed it elsewhere:** rather than changing RDKit's
+pickle default, it stops using the pickled `self.canonicals` in
+`task/predict/data_from_yaml.py` and reloads the molecules from `moldir` inside the worker.
+That avoids mutating RDKit global state, which is the better instinct; the one line here
+covers every module that might pickle a molecule rather than the one that was observed to.
+
 ### 4. `src/boltzgen/task/predict/data_*.py` — float64 features reaching MPS
 
 `transfer_batch_to_device` moves feature tensors to the device as they are, and some are
@@ -76,6 +97,10 @@ Patched in all four predict data modules (`data_from_yaml`, `data_from_generated
 `data_ligands`, `data_protein_binder`) to cast float64 to float32 before the move.
 Inference runs in float32 or bf16 regardless, so nothing is lost.
 
+**PR #145 gates the same cast** on `torch.backends.mps.is_available()`, so a CUDA or CPU host
+keeps its float64 tensors. That is the more careful form, since on those devices the cast is
+a silent change in precision rather than a fix.
+
 ## What was not changed, and is worth knowing
 
 **`accelerator: gpu` already works.** Lightning resolves it to `MPSAccelerator` when CUDA is
@@ -86,8 +111,10 @@ absent and MPS is available, so the shipped configs need no device override.
 softmaxes and confidence heads. Under an MPS autocast those disable *CUDA* autocast and have
 no effect, so those blocks run in bf16 rather than the float32 they were written to require.
 Nothing obviously wrong came out of the designs produced here, but if numerics look
-suspicious, run with `--config design trainer.precision=32`. A device-agnostic upstream fix
-would be `torch.autocast(device_type=x.device.type, enabled=False)`.
+suspicious, run with `--config design trainer.precision=32`. A device-agnostic fix would be
+`torch.autocast(device_type=x.device.type, enabled=False)`, and
+[PR #258](https://github.com/HannesStark/boltzgen/pull/258) takes the other route: force
+float32 on CPU and MPS instead of bf16-mixed. Neither is in the patch here.
 
 **Checkpoints are swapped, not co-resident.** Each pipeline step is its own process and the
 two design checkpoints are loaded in turn at a switch point, so only one ~2 GB model is ever
