@@ -399,6 +399,23 @@ Two things worth taking from this pair specifically:
   wraps 0.95 and engages 19. The fold that contacts the whole ligand binds 7.8 kcal/mol worse,
   which is the same thing `peptidebuilder` records for `s2_orig_control`.
 
+### Figures
+
+Medoid frames of the final 2 ns, rendered from `md/figures/`. Peptide and ligand as in
+`peptidebuilder`'s own renders; each is a real frame nearest its window mean, not an average.
+
+| `bg33_4` — helical hairpin, 19.0 ns | `bg33_3` — three-stranded sheet, 18.3 ns |
+|---|---|
+| ![bg33_4](md/figures/bg33_4_medoid.png) | ![bg33_3](md/figures/bg33_3_medoid.png) |
+| **ΔG −19.66 ± 0.02** | **ΔG −11.86 ± 0.02** |
+| VDWAALS −24.49, second only to `s3_orig_f12` | VDWAALS −14.15, the weakest of the eight |
+| ligand held for **100%** of the run, contacts rising 20.5 → 25.2, no release episodes | ligand out to ~11 Å by 6 ns, **41%** residence, 18 release episodes |
+| 0.59 enclosed, 0.95 wrapped, no aromatic residue anywhere in the sequence | 0.48 enclosed, **1.00 wrapped**, 20 of 20 ligand atoms engaged |
+
+The pair is the argument of this section: the one that wraps the whole ligand and has the real
+tertiary structure is the one that lets go, and the flat helix that contacts slightly less holds on
+and binds 7.8 kcal/mol better.
+
 `md/figures/bg_md_endpoints.pdb` holds both structures after the run — the medoid frame of each
 one's final 2 ns, a real frame nearest the window mean rather than an average, superposed on the
 ligand so the two peptides can be compared around it. Each leg's `frames_last.pdb` has the
