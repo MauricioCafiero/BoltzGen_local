@@ -135,6 +135,38 @@ desolvation penalty in a gas-phase interaction energy and is the first to weaken
 Ranking these three by wrapping quality gives `bg33_3` > `bg33_4` > `bg33_5`, the reverse of
 ranking them by how designed the sequences look.
 
+And all three are two-armed and folded back, which `tools/architecture.py` separates into two
+different things. Fitting an axis to each half of the chain:
+
+| | split at | axes | arms apart | end to end | non-local H-bonds |
+|---|---|---|---|---|---|
+| `bg33_4` | L21 | 166 deg | 9.9 A | 17.1 A | 0 |
+| `bg33_5` | A18 | 177 deg | 8.0 A | 6.9 A | 0 |
+| `bg33_3` | G20 | 171 deg | 7.3 A | 6.0 A | 6 |
+
+`bg33_4` and `bg33_5` are **helical hairpins** -- two antiparallel helices with a turn between
+them, bonded only to themselves, so the hydrogen-bond census shows nothing at all. `bg33_5`'s
+turn is the `KGKGARG` stretch at 14-20, and at 177 degrees with arms 8.0 A apart it is the same
+architecture as this repository's `s3_esm2_f4`, the helical hairpin that held its ligand on
+side-chain packing alone at MM/GBSA -21.08 kcal/mol. That is a known-good motif here, which
+makes `bg33_5` more interesting than its enclosure of 0.56 suggests.
+
+`bg33_3` is the only one with real beta pairing, and its six non-local hydrogen bonds fall into
+**two registers**, so it is a three-stranded sheet rather than a single hairpin:
+
+- `i+j~55`: `E24<->I31`, `Y33->G22` -- strands **22-24** and **31-33**, a hairpin closed by the
+  six-residue loop `K25 V26 G27 D28 S29 Y30`, with `GDS` as the turn.
+- `i+j~34`: `L4<->Y30`, `V32->I2` -- strand **2-4** pairing onto **30-32** across 25 intervening
+  residues, which is a third strand and not a turn.
+
+Sheet order 2-4 . 30-32 . 22-24. That is what puts `I2 V3 L4 K5` on the ester and the tail: the
+sheet holds that strand in position. The `GGG` at 20-22 is the linker into the sheet.
+
+**Read the registers, not the count.** Six non-local hydrogen bonds is in the range this
+repository calls extended and unpaired, and the first pass at this fold mislabelled the pairing
+by assuming each register splits at its own centre. What settles it is which residues are paired
+and how far apart they are in sequence.
+
 **The comparison is only fair as "what BoltzGen gives at laptop scale".** Eight designs is the
 regime its own README warns against; the filtering stage that does the work had nothing to filter,
 and the published results come from 10,000-20,000. Note also that this repository's folds were
