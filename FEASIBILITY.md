@@ -102,6 +102,39 @@ first bf16 attempt:
   designed helix-loop-helix. It wraps only half the ligand, so it is interesting as a sequence
   rather than as a complex.
 
+### How the three structured folds hold it
+
+`tools/contact_map.py` splits the ligand into moieties from its own SMILES and reports which
+residues contact which -- wrapping counts atoms without saying what is gripped, and for this
+ligand a peptide can stack the methoxyphenyl ring, bury the 2-ethylhexyl tail or sit on the
+ester in the middle. Ring 6 atoms, methoxy 2, vinyl 2, ester 3, tail 7:
+
+| | ring | methoxy | vinyl | ester | tail | residues | backbone contacts |
+|---|---|---|---|---|---|---|---|
+| `bg33_4` | 6/6 | 2/2 | 2/2 | 2/3 | 7/7 | 8 | 29 |
+| `bg33_5` | 3/6 | **0/2** | 1/2 | 2/3 | 4/7 | 10 | 14 |
+| **`bg33_3`** | 6/6 | 2/2 | 2/2 | **3/3** | 7/7 | 7 | 22 |
+
+`bg33_3` covers every moiety from seven residues, and they fall in two sequence-distant blocks:
+`I2 V3 L4 K5` on the ester and the tail, `I15 K18 L19` on the ring and the methoxy. A gap of 10
+to 17 residues between the two segments holding opposite ends of the ligand is the non-adjacent
+pairwise engagement `pair_contacts.py` argues is the informative content, and here it is backed
+by structure rather than luck -- 6 non-local backbone hydrogen bonds at Rg 8.5 A. Its 22
+backbone contacts echo `orig_f12`'s signature, carbonyls onto the ester carbons rather than
+charged side chains.
+
+`bg33_4` reaches 19 of 20 atoms the other way, from a 90% helix with no non-local hydrogen
+bonds and contacts spread from residue 5 to residue 30: the ligand lies along the helix. That is
+the groove mode, though its `centroid_sep`/`Rg` of 0.66 argues against that reading.
+
+`bg33_5` is the weakest of the three despite the most designed-looking sequence. The
+methoxyphenyl head is entirely uncontacted, 10 of 20 atoms are engaged across 10 residues, and
+three of the contacts are `K14`, `K16` and `R30` against a lipophile -- the mode that pays no
+desolvation penalty in a gas-phase interaction energy and is the first to weaken in water.
+
+Ranking these three by wrapping quality gives `bg33_3` > `bg33_4` > `bg33_5`, the reverse of
+ranking them by how designed the sequences look.
+
 **The comparison is only fair as "what BoltzGen gives at laptop scale".** Eight designs is the
 regime its own README warns against; the filtering stage that does the work had nothing to filter,
 and the published results come from 10,000-20,000. Note also that this repository's folds were
