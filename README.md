@@ -188,6 +188,6 @@ downstream of it work on BoltzGen output unchanged.
 
 ## Licence
 
-BoltzGen is MIT, © 2025 Hannes Stärk. The patch in this repository modifies that code and
-carries the same terms; the specifications, results and documentation here are this
-repository's own.
+This repository is MIT, © 2026 Mauricio Cafiero — see [LICENSE](LICENSE). BoltzGen itself is
+MIT, © 2025 Hannes Stärk; `mps-fixes.patch` modifies that code and carries its terms, and the
+specifications, results and documentation here are this repository's own.
