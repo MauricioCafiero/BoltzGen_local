@@ -28,7 +28,7 @@ caffeinate -w $$ &
     # precision=32 is not optional on MPS. The shipped bf16-mixed leaves the model's
     # ~50 torch.autocast("cuda", enabled=False) float32 guards inert under an MPS
     # autocast, and the ligand comes out with bond lengths wrong by up to 0.9 A --
-    # measured, see FEASIBILITY.md.
+    # measured, see the Traps section of README.md.
     boltzgen run $SPEC \
         --output workbench/$NAME \
         --protocol $PROTOCOL \
