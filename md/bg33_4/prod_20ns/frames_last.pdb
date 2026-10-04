@@ -1,4 +1,4 @@
-REMARK   1 CREATED WITH MDTraj 1.11.1, 2026-09-29
+REMARK   1 CREATED WITH MDTraj 1.11.1, 2026-10-04
 CRYST1   46.778   46.778   46.778  60.00  60.00  90.00 P 1           1 
 MODEL        0
 ATOM      1  N   GLY A   1      17.870   4.350 -12.030  1.00  0.00           N  

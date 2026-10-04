@@ -18,7 +18,9 @@ ROOT=$PWD              # absolute, so MM/GBSA can be run from inside its own out
 caffeinate -w $$ &
 date
 
-for n in bg33_3 bg33_4; do
+# bg33_2 first: it is the leg with unprocessed data (its trajectory was fetched from the racc
+# cluster 2026-10-04); bg33_3/bg33_4 hold only finished stages, which the guards skip in seconds.
+for n in bg33_2 bg33_3 bg33_4; do
     M=md/$n
     P=$M/prod_20ns
     echo "################ $n"
@@ -75,6 +77,8 @@ print(f'kept {len(keep)} of {len(t)} frames (leading $ns ns)')
 
     # What the ligand did over the run, which one dG cannot show.
     $PY $REPO/code/md_contacts.py $P --csv $M/md_contacts.csv || true
+    # End-of-run ensemble (pipeline step per CLAUDE.md: contacts and frames, both, on every leg).
+    $PY $REPO/code/md_frames.py $P || true
     echo "DONE[$n]"
     date
 done

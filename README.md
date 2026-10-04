@@ -6,10 +6,11 @@ device exists, so it does not install and does not run on a Mac.
 
 This repository holds the seven-file patch that makes it run, and the results of pointing it at
 the problem `peptidebuilder` works on: designing a short peptide that binds a small molecule.
-Eight designs were produced, folded, measured with that project's own metrics, and two were taken
-through 20 ns of dynamics and MM/GBSA. The headline is that one of those two is the third-strongest
-binder measured anywhere in the project and the other is the weakest, and that what separates them
-is not what the static screen was built to detect.
+Eight designs were produced, folded, measured with that project's own metrics, and three were taken
+through 20 ns of dynamics and MM/GBSA. The headline is that the strongest of them, `bg33_4`, is the
+third-strongest
+binder measured anywhere in the project and the weakest, `bg33_2`, let go of the ligand entirely in
+the last 5 ns, and that what separates them is not what the static screen was built to detect.
 
 **BoltzGen's own source is not copied here.** Get it from upstream and patch it, which is what the
 directions below do. The interesting content is 23 lines; a vendored copy of a 63 MB tree under
@@ -29,7 +30,7 @@ Verified on macOS 26.5, 8 GB unified memory, Python 3.12, torch 2.14.
 - [The design specification](#the-design-specification)
 - [Worked example: eight peptides for one small molecule](#worked-example-eight-peptides-for-one-small-molecule)
 - [How the structured folds hold the ligand](#how-the-structured-folds-hold-the-ligand)
-- [Dynamics and MM/GBSA: the verdict on two of them](#dynamics-and-mmgbsa-the-verdict-on-two-of-them)
+- [Dynamics and MM/GBSA: the verdict on three of them](#dynamics-and-mmgbsa-the-verdict-on-three-of-them)
 - [What the physics selects, unprompted](#what-the-physics-selects-unprompted)
 - [Scale is the limit, not the hardware](#scale-is-the-limit-not-the-hardware)
 - [Traps](#traps)
@@ -333,10 +334,11 @@ The `GGG` at 20–22 is the linker into the sheet.
 pairing by assuming each register splits at its own centre. What settles it is which residues are
 paired and how far apart they are in sequence.
 
-## Dynamics and MM/GBSA: the verdict on two of them
+## Dynamics and MM/GBSA: the verdict on three of them
 
-The two structured folds with real contact sets — `bg33_4`, the best-enclosed of the eight, and
-`bg33_3`, the only one wrapping all twenty ligand atoms — were taken through `peptidebuilder`'s own
+The structured folds with real contact sets — `bg33_4`, the best-enclosed of the eight,
+`bg33_3`, the only one wrapping all twenty ligand atoms, and `bg33_2` (run on the Reading ARC, see
+below) — were taken through `peptidebuilder`'s own
 protocol locally: 20 ns in the `openmm-md` conda environment via the `omd` CLI, the same code its
 Modal runs import, in a dodecahedral box.
 
@@ -351,16 +353,19 @@ convergence series cost nothing beyond the trajectory itself. `md/windows_live.s
 `md/window_live.py` slices by streaming rather than loading the file, because `mdtraj.load` on a
 growing 20 ns trajectory is ~700 MB resident and the machine already swaps under the run.
 
-| window | `bg33_4` | change | `bg33_3` | change |
-|---|---|---|---|---|
-| 2.46 ns | — | | −14.55 ± 0.05 | — |
-| 5 ns | −19.18 ± 0.04 | — | −12.46 ± 0.05 | +2.09 |
-| 10 ns | −18.89 ± 0.03 | +0.29 | −11.33 ± 0.03 | +1.13 |
-| 15 ns | −19.43 ± 0.02 | −0.54 | −11.50 ± 0.03 | −0.17 |
-| **20 ns** | **−19.66 ± 0.02** | −0.23 | **−11.86 ± 0.02** | −0.36 |
+| window | `bg33_4` | change | `bg33_3` | change | `bg33_2` (racc leg) | change |
+|---|---|---|---|---|---|---|
+| 2.46 ns | — | | −14.55 ± 0.05 | — | — | |
+| 5 ns | −19.18 ± 0.04 | — | −12.46 ± 0.05 | +2.09 | −11.18 ± 0.03 | — |
+| 10 ns | −18.89 ± 0.03 | +0.29 | −11.33 ± 0.03 | +1.13 | −11.32 ± 0.02 | +0.14 |
+| 15 ns | −19.43 ± 0.02 | −0.54 | −11.50 ± 0.03 | −0.17 | −10.70 ± 0.03 | −0.62 |
+| **20 ns** | **−19.66 ± 0.02** | −0.23 | **−11.86 ± 0.02** | −0.36 | **−8.02 ± 0.04** | −2.68 |
 
 `bg33_4` was converged from its first window — 0.54 kcal/mol across the whole series, where
-`bg33_3` moved 2.7 and `orig_f12` moved 7.8 over the same range. Both structures are 33 residues
+`bg33_3` moved 2.7 and `orig_f12` moved 7.8 over the same range. `bg33_2`'s series is not convergence
+at any value: flat near −11.2 through 15 ns and then −8.0, because the ligand left — 9 release
+episodes at 10 ps spacing, 50.9% residence within 10 Å, 99% of detached time after the midpoint,
+and the final 5 ns fully released. Both `bg33_3` structures are 33 residues
 and everything compared below is 33 or 34, so unlike the static comparison this needs no length
 caveat.
 
@@ -374,9 +379,12 @@ caveat.
 | `shuffle_control_esm0` (null) | −17.64 | −5.75 | +11.72 | −2.65 | −14.32 | 2 |
 | `orig_f12` | −19.75 | −5.32 | +14.01 | −2.64 | −13.71 | 0 |
 | **`bg33_3`** | **−14.15** | −1.61 | +6.18 | −2.28 | **−11.86** | **0** |
+| `bg33_2` | −9.49 | −0.27 | +3.14 | −1.41 | −8.02 | 0 |
 
-**`bg33_4` is third of eight, ahead of both shuffled nulls; `bg33_3` is last.** 7.8 kcal/mol
-separates two designs from the same run of the same tool against the same ligand.
+**`bg33_4` is third of nine, ahead of both shuffled nulls; `bg33_2` is last.** 11.6 kcal/mol
+separates two designs from the same run of the same tool against the same ligand — and `bg33_2`'s
+−8.02 is an average of 15 ns of real binding and 5 ns of empty space, so even that number gives the
+structure more credit than the trajectory supports.
 
 **What separates them is dispersion, and the trajectories agree:**
 
