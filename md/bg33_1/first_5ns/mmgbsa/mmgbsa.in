@@ -1,0 +1,9 @@
+Sample MM/GBSA input -- single trajectory, GBn2
+&general
+   verbose=2,
+   startframe=1, endframe=5000, interval=1,
+   receptor_mask="!:LIG", ligand_mask=":LIG",
+/
+&gb
+   igb=8, saltcon=0.15,
+/

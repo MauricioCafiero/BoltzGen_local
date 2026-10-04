@@ -30,7 +30,7 @@ Verified on macOS 26.5, 8 GB unified memory, Python 3.12, torch 2.14.
 - [The design specification](#the-design-specification)
 - [Worked example: eight peptides for one small molecule](#worked-example-eight-peptides-for-one-small-molecule)
 - [How the structured folds hold the ligand](#how-the-structured-folds-hold-the-ligand)
-- [Dynamics and MM/GBSA: the verdict on three of them](#dynamics-and-mmgbsa-the-verdict-on-three-of-them)
+- [Dynamics and MM/GBSA: the verdict on four of them](#dynamics-and-mmgbsa-the-verdict-on-four-of-them)
 - [What the physics selects, unprompted](#what-the-physics-selects-unprompted)
 - [Scale is the limit, not the hardware](#scale-is-the-limit-not-the-hardware)
 - [Traps](#traps)
@@ -334,11 +334,11 @@ The `GGG` at 20–22 is the linker into the sheet.
 pairing by assuming each register splits at its own centre. What settles it is which residues are
 paired and how far apart they are in sequence.
 
-## Dynamics and MM/GBSA: the verdict on three of them
+## Dynamics and MM/GBSA: the verdict on four of them
 
 The structured folds with real contact sets — `bg33_4`, the best-enclosed of the eight,
-`bg33_3`, the only one wrapping all twenty ligand atoms, and `bg33_2` (run on the Reading ARC, see
-below) — were taken through `peptidebuilder`'s own
+`bg33_3`, the only one wrapping all twenty ligand atoms, `bg33_2` and `bg33_1` (both run on the
+Reading ARC H100 NVL, see `peptidebuilder`/CLAUDE.md for the cluster recipe) — were taken through `peptidebuilder`'s own
 protocol locally: 20 ns in the `openmm-md` conda environment via the `omd` CLI, the same code its
 Modal runs import, in a dodecahedral box.
 
@@ -353,19 +353,22 @@ convergence series cost nothing beyond the trajectory itself. `md/windows_live.s
 `md/window_live.py` slices by streaming rather than loading the file, because `mdtraj.load` on a
 growing 20 ns trajectory is ~700 MB resident and the machine already swaps under the run.
 
-| window | `bg33_4` | change | `bg33_3` | change | `bg33_2` (racc leg) | change |
-|---|---|---|---|---|---|---|
-| 2.46 ns | — | | −14.55 ± 0.05 | — | — | |
-| 5 ns | −19.18 ± 0.04 | — | −12.46 ± 0.05 | +2.09 | −11.18 ± 0.03 | — |
-| 10 ns | −18.89 ± 0.03 | +0.29 | −11.33 ± 0.03 | +1.13 | −11.32 ± 0.02 | +0.14 |
-| 15 ns | −19.43 ± 0.02 | −0.54 | −11.50 ± 0.03 | −0.17 | −10.70 ± 0.03 | −0.62 |
-| **20 ns** | **−19.66 ± 0.02** | −0.23 | **−11.86 ± 0.02** | −0.36 | **−8.02 ± 0.04** | −2.68 |
+| window | `bg33_4` | change | `bg33_3` | change | `bg33_2` (racc leg) | change | `bg33_1` (racc leg) | change |
+|---|---|---|---|---|---|---|---|---|
+| 2.46 ns | — | | −14.55 ± 0.05 | — | — | | — | |
+| 5 ns | −19.18 ± 0.04 | — | −12.46 ± 0.05 | +2.09 | −11.18 ± 0.03 | — | −7.11 ± 0.03 | — |
+| 10 ns | −18.89 ± 0.03 | +0.29 | −11.33 ± 0.03 | +1.13 | −11.32 ± 0.02 | +0.14 | −10.02 ± 0.04 | +2.91 |
+| 15 ns | −19.43 ± 0.02 | −0.54 | −11.50 ± 0.03 | −0.17 | −10.70 ± 0.03 | −0.62 | −11.30 ± 0.03 | +1.28 |
+| **20 ns** | **−19.66 ± 0.02** | −0.23 | **−11.86 ± 0.02** | −0.36 | **−8.02 ± 0.04** | −2.68 | **−11.31 ± 0.03** | −0.01 |
 
 `bg33_4` was converged from its first window — 0.54 kcal/mol across the whole series, where
 `bg33_3` moved 2.7 and `orig_f12` moved 7.8 over the same range. `bg33_2`'s series is not convergence
 at any value: flat near −11.2 through 15 ns and then −8.0, because the ligand left — 9 release
 episodes at 10 ps spacing, 50.9% residence within 10 Å, 99% of detached time after the midpoint,
-and the final 5 ns fully released. Both `bg33_3` structures are 33 residues
+and the final 5 ns fully released. `bg33_1` is the same trap read from the other side: its 5 ns
+window under-reads (−7.11, the ligand drifting out to 28 Å early in the run) and the series converges
+*upward* to −11.31, flat over the last 10 ns. Both racc legs are 20,000-frame trajectories fetched
+from the cluster's scratch volume. Both `bg33_3` structures are 33 residues
 and everything compared below is 33 or 34, so unlike the static comparison this needs no length
 caveat.
 
@@ -379,12 +382,15 @@ caveat.
 | `shuffle_control_esm0` (null) | −17.64 | −5.75 | +11.72 | −2.65 | −14.32 | 2 |
 | `orig_f12` | −19.75 | −5.32 | +14.01 | −2.64 | −13.71 | 0 |
 | **`bg33_3`** | **−14.15** | −1.61 | +6.18 | −2.28 | **−11.86** | **0** |
+| `bg33_1` | −13.34 | −0.42 | +4.46 | −2.02 | −11.31 | 0 |
 | `bg33_2` | −9.49 | −0.27 | +3.14 | −1.41 | −8.02 | 0 |
 
-**`bg33_4` is third of nine, ahead of both shuffled nulls; `bg33_2` is last.** 11.6 kcal/mol
-separates two designs from the same run of the same tool against the same ligand — and `bg33_2`'s
-−8.02 is an average of 15 ns of real binding and 5 ns of empty space, so even that number gives the
-structure more credit than the trajectory supports.
+**`bg33_4` is third of ten, ahead of both shuffled nulls; `bg33_1` is ninth and `bg33_2` is last.**
+11.6 kcal/mol separates the best and worst of the four taken through dynamics — designs from the
+same run of the same tool against the same ligand — and `bg33_2`'s −8.02 is an average of 15 ns of
+real binding and 5 ns of empty space, so even that number gives the structure more credit than the
+trajectory supports. `bg33_1`'s −11.31 is the opposite failure mode: nothing in the trajectory is
+bad, the ensemble just never binds (below).
 
 **What separates them is dispersion, and the trajectories agree:**
 
@@ -392,12 +398,19 @@ structure more credit than the trajectory supports.
 |---|---|---|---|---|
 | `bg33_4` | 20.5 **→ 25.2** (mean 23.9) | 6.67 → 6.16 Å, max 9.3 | **100.0%** | **0 frames, 0 episodes** |
 | `bg33_3` | 17.8 **→ 10.1** (mean 11.3) | 8.76 → 10.62 Å, max 28.4 | **41.0%** | 20 frames, 18 episodes |
+| `bg33_1` | 12.1 **→ 16.9** (mean 14.7) | 20.62 → 11.68 Å, max 28.4 | **14.5%** | 19 frames, 16 episodes |
 
 `bg33_4`'s contacts *increase* over the run and the ligand is never more than 9.3 Å away; only
 `s3_orig_f12` also managed 100% residence with no releases. `bg33_3` drifts out to ~11 Å in the
-first 6 ns and stays there, giving the worst residence and the most release episodes of anything
-measured in the project. Its first 2.5 ns read 94% residence with no releases — the same trap the
-short ΔG windows set, where a short window measures the predicted pose rather than the ensemble.
+first 6 ns and stays there. `bg33_1` is the project record for low residence — but its releases
+matter less than they look: 0.19 ns detached in total, 0% of that in the second half, closest
+heavy-atom approach 2.71 Å. It never truly leaves; the centroid just walks the ligand along the
+peptide surface instead of parking it in a pocket, so it reads as a **surface roamer** rather than a
+binder or a release case, and its window series (−7.11 → −11.31) is the ensemble never settling
+rather than a ligand departing. Watch the same trap from both directions here: `bg33_3`'s first
+2.5 ns read 94% residence with no releases and a short window would have over-rated it, while a
+short window on `bg33_1` *under*-rates it at −7.11 — either way a leading window measures whatever
+the first nanoseconds happen to look like, not the ensemble.
 
 Two things worth taking from this pair specifically:
 

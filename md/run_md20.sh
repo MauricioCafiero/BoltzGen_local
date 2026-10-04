@@ -18,9 +18,11 @@ ROOT=$PWD              # absolute, so MM/GBSA can be run from inside its own out
 caffeinate -w $$ &
 date
 
-# bg33_2 first: it is the leg with unprocessed data (its trajectory was fetched from the racc
-# cluster 2026-10-04); bg33_3/bg33_4 hold only finished stages, which the guards skip in seconds.
-for n in bg33_2 bg33_3 bg33_4; do
+# Legs default to the three recorded here; pass names to tail only specific legs, e.g.
+# `./run_md20.sh bg33_1` after fetching a new trajectory whose stages are otherwise unprocessed.
+# (bg33_2's tail, including its windows and contacts, ran 2026-10-04.)
+LEGS="${*:-bg33_2 bg33_3 bg33_4}"
+for n in ${=LEGS}; do
     M=md/$n
     P=$M/prod_20ns
     echo "################ $n"
