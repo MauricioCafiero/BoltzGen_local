@@ -1,0 +1,13 @@
+# Length-matched to the peptidebuilder oxybenzone designs, same ligand-only target.
+# 31 residues is the aromatic shell (shell 2), which holds the strongest binder in the
+# project -- ox2_orig_f8 at -24.21 kcal/mol, 100% retention -- and five of the eight base
+# MD legs including both shuffle nulls. Shells 1 and 3 fold to 25 and 27 residues.
+# SMILES perceived from runs/oxybenzone/md/ox2_orig_f8/ox2_orig_f8_ligand.sdf, which is
+# the bond-ordered form of peptide_builder.py's built-in oxybenzone (C14H12O3, 29 atoms).
+entities:
+  - protein:
+      id: A
+      sequence: 31..31
+  - ligand:
+      id: B
+      smiles: "COc1ccc(C(=O)c2ccccc2)c(O)c1"

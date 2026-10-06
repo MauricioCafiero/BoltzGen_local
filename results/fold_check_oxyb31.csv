@@ -1,0 +1,7 @@
+name,closest_approach,contacts_under_cutoff,bound,enclosed_fraction,centroid_separation,peptide_rg,helical_fraction,beta_fraction,helical_hbonds,nonlocal_hbonds,ligand_heavy_atoms,engaged,wrapped_fraction,mean_ligand_distance,hints_applied,n_hints,hints_satisfied,hint_rate,worst_hint_miss,forced
+oxybenzone31_0,3.49,5,1,0.365,6.4,13.7,1.0,0.0,36,0,17,9,0.529,4.6,0,0,0,,0.0,
+oxybenzone31_1,3.44,5,1,0.325,10.7,13.6,0.966,0.0,41,0,17,7,0.412,4.72,0,0,0,,0.0,
+oxybenzone31_2,3.33,9,1,0.44,9.1,13.3,1.0,0.0,41,0,17,13,0.765,4.19,0,0,0,,0.0,
+oxybenzone31_3,3.23,36,1,0.955,4.0,9.5,0.862,0.069,29,0,17,17,1.0,3.59,0,0,0,,0.0,
+oxybenzone31_4,3.35,24,1,0.65,6.7,8.9,0.724,0.103,26,0,17,16,0.941,3.81,0,0,0,,0.0,
+oxybenzone31_5,3.03,14,1,0.5,7.0,9.3,0.759,0.138,34,0,17,13,0.765,4.26,0,0,0,,0.0,

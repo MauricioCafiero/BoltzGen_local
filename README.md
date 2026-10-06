@@ -30,6 +30,7 @@ Verified on macOS 26.5, 8 GB unified memory, Python 3.12, torch 2.14.
 - [The design specification](#the-design-specification)
 - [Worked example: eight peptides for one small molecule](#worked-example-eight-peptides-for-one-small-molecule)
 - [How the structured folds hold the ligand](#how-the-structured-folds-hold-the-ligand)
+- [A second molecule: six peptides for oxybenzone](#a-second-molecule-six-peptides-for-oxybenzone)
 - [Dynamics and MM/GBSA: the verdict on four of them](#dynamics-and-mmgbsa-the-verdict-on-four-of-them)
 - [What the physics selects, unprompted](#what-the-physics-selects-unprompted)
 - [Scale is the limit, not the hardware](#scale-is-the-limit-not-the-hardware)
@@ -183,6 +184,7 @@ boltzgen_local/
 ├── specs/                design specifications
 │   ├── octinoxate.yaml       peptide of 12–21 residues, ligand-only target
 │   ├── octinoxate33.yaml     the same at 33 residues, matching peptidebuilder's designs
+│   ├── oxybenzone31.yaml     benzophenone-3 at 31 residues, matching its aromatic shell
 │   └── ifold/                redesigning the sequence of an existing complex
 ├── results/              the eight refolded complexes as BoltzGen wrote them, and fold_check.csv
 │   └── bf16_precision_artifact/   the discarded bf16 set, kept as evidence
@@ -333,6 +335,50 @@ The `GGG` at 20–22 is the linker into the sheet.
 `peptidebuilder` calls extended-and-unpaired, and the first pass at this fold mislabelled the
 pairing by assuming each register splits at its own centre. What settles it is which residues are
 paired and how far apart they are in sequence.
+
+## A second molecule: six peptides for oxybenzone
+
+The same protocol against oxybenzone (benzophenone-3, 17 heavy atoms against the octinoxate
+analogue's 20), length-matched to `peptidebuilder`'s oxybenzone designs the way `octinoxate33.yaml`
+was matched to its 33-residue ones. `specs/oxybenzone31.yaml` fixes `31..31`, which is that
+project's aromatic shell — the shell holding its strongest binder anywhere, `ox2_orig_f8` at
+−24.21 kcal/mol and 100% ligand retention. Its other two shells fold to 25 and 27 residues. Six
+designs, float32, nine minutes end to end on this laptop.
+
+| structure | encl | wrap | eng | cent sep | closest | ALA frac | Vina | pose1 RMSD | best RMSD | sequence |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **`bgox31_3`** | **0.95** | **1.00** | **17/17** | **4.0** | 3.23 | 0.10 | **−7.40** | 2.26 | **0.77** | `SEEELERAARELVEAGEISSGTLEEIKEKLS` |
+| `bgox31_4` | 0.65 | 0.94 | 16/17 | 6.7 | 3.35 | **0.00** | −4.80 | 6.56 | 0.65 | `SKEELIKKGKELIKEGKLPPMTDEEMIEVTR` |
+| `bgox31_5` | 0.50 | 0.77 | 13/17 | 7.0 | **3.03** | 0.23 | −5.00 | 4.19 | 4.06 | `GPFEAAVRELARRAAAAGIELTDEEIEEILK` |
+| `bgox31_2` | 0.44 | 0.77 | 13/17 | 9.1 | 3.33 | 0.65 | −4.10 | 6.31 | 5.76 | `GAAEAARAAAAAIRAVRAALRAAAALAAALA` |
+| `oxybenzone31_0` | 0.36 | 0.53 | 9/17 | 6.4 | 3.49 | 0.84 | — | — | — | `GAAAAAARVAAGRAAAAAAAAAAAAAAAAAA` |
+| `oxybenzone31_1` | 0.33 | 0.41 | 7/17 | 10.7 | 3.44 | 0.77 | — | — | — | `AAAAAAAARGAAVVAAIAAAVAAALAAAAAA` |
+
+**This is a better result than the octinoxate set, on the one measure that set failed.** There, every
+one of eight folds was less enclosed than `peptidebuilder`'s shuffled null at 0.74, and the best
+reached 0.59. Here `bgox31_3` reaches 0.95 enclosed with all seventeen ligand atoms wrapped and the
+ligand centroid 4.0 Å from the peptide's — level with the best fold in that project, and the first
+time this pipeline has put a ligand genuinely inside a designed peptide. Vina agrees: docking it
+independently recovers the predicted pose to 0.77 Å and scores it 2.4 kcal/mol better than any
+other design here. `bgox31_3` also carries BoltzGen's own best interface numbers (design-to-target
+iptm 0.589, minimum interaction PAE 2.02, ΔSASA 354).
+
+**The poly-alanine collapse recurred, at three of six against octinoxate's five of eight**, and the
+cause is the same mechanical one: `--inverse_fold_num_sequences` defaults to 1, so each backbone gets
+exactly one sequence and the filtering stage has nothing to select among. `run.sh` now takes
+`IF_NUM_SEQ=<n>` to raise it, unset by default so the two sets stay comparable. What is worth noticing
+is that **BoltzGen's own filters reward the collapse**: the three alanine-rich designs pass four
+filters each while `bgox31_3` and `bgox31_5` pass one, because an alanine helix refolds onto its own
+backbone at RMSD 0.63–0.79 where the real sequences manage 2.08 and 3.67. `filter_rmsd` measures
+designability, and poly-alanine is trivially designable. Only `bgox31_4` passes all nine.
+
+Four were carried forward — the two strongest plus two contrasts, dropping the two weakest contact
+sets, as with the octinoxate set. `bgox31_2` is kept deliberately although it is poly-alanine and
+leaves the ligand outside at 9.1 Å, because the strongest binder in the octinoxate set was itself
+alanine-rich: excluding the type would beg the question. The four are prepared in `md/bgox31_*`,
+docked into `peptidebuilder`'s `runs/oxybenzone/dock/`, and bundled for GNINA rescoring in
+`runs/oxybenzone/gnina/`. Ligand geometry is clean at float32 — worst bond error 0.030 Å, nothing
+above 0.15 Å.
 
 ## Dynamics and MM/GBSA: the verdict on four of them
 
