@@ -25,3 +25,8 @@ _MMPBSA_*
 *.frc
 mdinfo
 md/inputs_oxyb/
+
+# racc_drain.sh bookkeeping, not results: .drained is its per-leg sentinel (a fresh clone must not
+# inherit it) and tail.log the transcript of that leg's local tail.
+md/*/.drained
+md/*/tail.log
