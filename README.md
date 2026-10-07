@@ -36,6 +36,7 @@ Verified on macOS 26.5, 8 GB unified memory, Python 3.12, torch 2.14.
 - [Scale is the limit, not the hardware](#scale-is-the-limit-not-the-hardware)
 - [Traps](#traps)
 - [Reusing structures between this and peptidebuilder](#reusing-structures-between-this-and-peptidebuilder)
+  - [From a finished run to a dynamics leg](#from-a-finished-run-to-a-dynamics-leg)
 - [What to do next](#what-to-do-next)
 - [Licence](#licence)
 
@@ -626,6 +627,96 @@ Boltz's does not, and `peptidebuilder`'s `code/uma_binding.py:parse_cif` reads f
 so it would take the entity id as the residue number and collapse every residue into one.
 `tools/bg_to_boltz_cif.py` converts the layout, which is enough to make `check_fold.py` and
 everything downstream work on BoltzGen output unchanged.
+
+### From a finished run to a dynamics leg
+
+The whole chain, which was tacit until 2026-10-07 and had to be re-derived from the `bg33_*`
+leftovers the second time it was needed. `<mol>` is the ligand system name in `peptidebuilder`
+(`octinoxate`, `oxybenzone`), `<leg>` the name the leg will carry everywhere afterwards.
+
+**1. Score the refolds and choose.** `workbench/<name>/intermediate_designs_inverse_folded/refold_cif/`
+holds one cif per design. Put them through `peptidebuilder`'s own fold check:
+
+```sh
+SMILES='COc1ccc(C(=O)c2ccccc2)c(O)c1' tools/metrics.sh /tmp/check workbench/<name>/.../refold_cif/*.cif
+```
+
+**`SMILES` is not optional for a second molecule.** `tools/metrics.sh` defaults it to the octinoxate
+analogue, and `lig_geom.py` would then measure every bond against the wrong reference and report
+plausible-looking errors. Take the string from the system's own ligand rather than typing it:
+`peptidebuilder/code/boltz_check.py:ligand_smiles('runs/<mol>')` perceives it from `ligand.xyz`.
+Choose on `enclosed` first — it is the metric that got the order right on the `bg33` pair, and the one
+BoltzGen's own filters cannot see.
+
+**2. Build a stand-in run directory.** `code/cif_to_md.py` expects a `peptidebuilder` run directory,
+so give it a fake one: that is all `md/inputs/` has ever been, and why it is gitignored.
+
+```sh
+mkdir -p md/inputs_<mol>/boltz/boltz_results_<leg>/predictions/<leg>
+cp ~/python_mac/peptidebuilder/runs/<mol>/ligand.xyz md/inputs_<mol>/ligand.xyz
+<peptidebuilder>/.venv/bin/python tools/bg_to_boltz_cif.py <refold>.cif \
+    md/inputs_<mol>/boltz/boltz_results_<leg>/predictions/<leg>/<leg>_model_0.cif
+```
+
+The `ligand.xyz` copy is what `cif_to_md.py` reads the SMILES from, and the directory names carry the
+leg name, so name the converted cif for the leg rather than the design.
+
+**3. Split into the two files MD wants**, then build:
+
+```sh
+<peptidebuilder>/.venv/bin/python <peptidebuilder>/code/cif_to_md.py md/inputs_<mol> \
+    --structure <leg> --out-dir md/<leg>
+md/prep.sh <leg>                      # co-folded leg: prep-protein, prep-ligand, omd build
+```
+
+Check the formula it prints against the run's ligand; `cif_to_md.py` assigns bond orders from the
+SMILES template, and a silent mismatch there parameterises the ligand as something it is not.
+
+**4. Docked poses** go through `peptidebuilder` instead, which needs the co-fold's receptor:
+
+```sh
+cd <peptidebuilder>
+.venv/bin/python code/vina_redock.py --system <mol> --md-root ~/python_mac/boltzgen_local/md \
+    --out /tmp/dock_new <leg>...        # see the interpreter warning below
+STRUCT=<leg> POSE=<N> SYSNAME=<mol> SRC=~/python_mac/boltzgen_local/md/<leg> \
+    zsh code/run_dock_pose_md.sh BUILD_ONLY=1
+```
+
+**`vina_redock.py` must run under `~/python_mac/dock_assist/dock-env/bin/python`, not
+peptidebuilder's `.venv`.** It finds Vina via `import dockstring`, and dockstring — which vendors the
+binary — is installed only in `dock-env`. Under `.venv` every structure fails with
+`DockError: could not import dockstring…`, and that error's suggestion to "pass --vina-bin" is a dead
+end: the flag exists in `vina_dock.py` but `vina_redock.py` never exposes it.
+
+**`vina_redock.py` and `make_gnina_bundle.py` rewrite their tables wholesale** over only the
+structures named — `dock_summary.csv`/`dock_poses.csv` for the first, `reference.csv` for the second —
+so a run naming just the new legs drops every other row. Dock into a scratch `--out` and append the
+rows (the gnina side has no `--out`, so back the file up and merge), then confirm the diff is
+additions-only. Docking is deterministic at seed 42, so a repeat reproduces rows exactly.
+
+**5. Run, then tail.** On racc, `peptidebuilder/code/racc_feed.sh` stages and submits and
+`racc_drain.sh` fetches each completion and runs its tail; `racc_run.py` takes `LEGS` as a
+comma-separated list to put several legs in one job, which matters because `gpuscavenger` allows only
+3 submitted jobs and runs 1, so spare slots cannot add throughput and an unattended campaign has to
+be banked in a single job.
+
+**The tail is a different script for each kind of leg**, and this is the one place where guessing is
+expensive:
+
+| leg | tail |
+|---|---|
+| `<leg>` (co-folded) | `md/run_md20.sh <leg>` |
+| `<leg>_dock<N>` | `peptidebuilder/code/run_dock_pose_md.sh` with `STRUCT`/`POSE`/`SYSNAME`/`SRC` |
+
+Both skip the dynamics when only `traj_wrapped.xtc` is present and slice their windows from the
+wrapped solute. That matters because a racc leg deliberately arrives with no `traj.dcd` — the full box
+stays on cluster scratch — and before 2026-10-07 `run_md20.sh` tested only for the dcd and would have
+started a fresh 20 ns run on the laptop.
+
+**6. Record it.** `collect_mmgbsa_rows.py --outdir runs/<mol> --md-root ~/python_mac/boltzgen_local/md`
+(the `--md-root` is what reaches co-folds living here), `md_contacts.py`, `md_frames.py`,
+`ligand_slide.py`, and `md_stability.py` with **every** lane's glob — it rewrites one file shared
+across all ligands, and will now refuse to shrink it.
 
 ## What to do next
 
