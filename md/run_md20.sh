@@ -101,6 +101,23 @@ print(f'kept {len(keep)} of {len(t)} wrapped frames (leading $ns ns)')
     $PY $REPO/code/md_contacts.py $P --csv $M/md_contacts.csv || true
     # End-of-run ensemble (pipeline step per CLAUDE.md: contacts and frames, both, on every leg).
     $PY $REPO/code/md_frames.py $P || true
+
+    # The leg's figure, from the medoid md_frames.py just wrote -- a pipeline step for the same
+    # reason contacts and frames are, since an optional step is a skipped step. Guarded so it can
+    # never fail the leg: a missing env or a broken render is logged and the loop carries on,
+    # because an MD leg is not invalid because a picture did not draw. Its own interpreter, as this
+    # needs PyMOL and the MD env has none. Only this leg's medoid is named -- never a glob, which
+    # would rewrite other legs' images. render_md_figures.py skips an existing PNG.
+    #
+    # --crop none deliberately: cropping is decided across a whole batch and one leg cannot know
+    # the campaign's shared box, so this matches what the whole-campaign run produces.
+    PYMOL_ENV=${PYMOL_ENV:-$HOME/miniforge3/envs/pymol-render}
+    if [[ -x $PYMOL_ENV/bin/python ]]; then
+        $PYMOL_ENV/bin/python $REPO/code/render_md_figures.py --crop none $P/frame_medoid.pdb \
+            || echo "FIGURE_FAILED (ignored, the leg is fine)"
+    else
+        echo "FIGURE_SKIPPED no pymol env at $PYMOL_ENV"
+    fi
     echo "DONE[$n]"
     date
 done
