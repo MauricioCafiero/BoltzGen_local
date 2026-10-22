@@ -713,10 +713,41 @@ wrapped solute. That matters because a racc leg deliberately arrives with no `tr
 stays on cluster scratch — and before 2026-10-07 `run_md20.sh` tested only for the dcd and would have
 started a fresh 20 ns run on the laptop.
 
-**6. Record it.** `collect_mmgbsa_rows.py --outdir runs/<mol> --md-root ~/python_mac/boltzgen_local/md`
-(the `--md-root` is what reaches co-folds living here), `md_contacts.py`, `md_frames.py`,
-`ligand_slide.py`, and `md_stability.py` with **every** lane's glob — it rewrites one file shared
-across all ligands, and will now refuse to shrink it.
+**6. Record it — one command now.** `peptidebuilder/code/record_leg.py <mol> <leg>` runs the whole
+recording set and appends to every table; the individual calls it wraps used to be run by hand.
+
+```sh
+cd <peptidebuilder> && python3 code/record_leg.py <mol> <leg>
+```
+
+It writes the per-leg log `runs/folds_md/record_<leg>.log`, ending in a
+`<leg>: dG … | windows … | residence … | slide … | Ca … | pairs …` line and an
+`audit: windows 4/4, summary rows 4, frames True, scatter 0 -> OK` line — that audit line is the
+leg-is-done signal, and `code/watch_legs.py` keys on it. Underneath it is still
+`collect_mmgbsa_rows.py --outdir runs/<mol> --md-root ~/python_mac/boltzgen_local/md` (that
+`--md-root` is what reaches co-folds living *here*; both paths are required and neither has a
+default), `md_contacts.py`, `md_frames.py`, `ligand_slide.py --csv`, and `md_stability.py` with
+**every** lane's glob — it rewrites one file shared across all ligands and will refuse to shrink it.
+
+**The audit line is not the whole audit.** It checks windows, summary rows, frames and scatter and
+nothing else, so run CLAUDE.md's four-line "Audit the recording set" query against the leg as well —
+that is what caught five pair rows lost to a whole-table rewrite on 2026-10-20.
+
+**A leg from this repo gets no pair row, and that is correct, not a gap.** `pair_contacts.py`
+derives everything it reports — pairs, `sim`, dead slots, band position — from the *designed* slots,
+i.e. the non-glycine positions of a parent `design.json`. The specs here (`specs/octinoxate33.yaml`,
+`specs/oxybenzone31.yaml`) fix only length and ligand SMILES; the sequence is freely generated, so
+there is no parent design and no slot set. Scoring a generated peptide against some shell design's
+slots is a borrowed convention that yields plausible-looking numbers measuring nothing — all such
+numbers were retracted on 2026-10-18, and on 2026-10-22 the rule became **no generator arm gets
+pair rows at all**. `pair_contacts.is_generator_arm()` (matching `bg33_*`, `bgox31_*`) now skips
+them at the writer, so `record_leg.py` reports `no pair table (… generator arm …)` and the
+`bg33`/`bgox31` pair columns in `FOLDS.md` and `RESULTS.md` stay dashed permanently. Do not restore
+them.
+
+**Replicates of a leg from here** (`<leg>_r2`, `_r3`) route to `runs/<mol>/md/mmgbsa_replicates.csv`,
+never the canonical summary, and `make_gnina_bundle.py`'s `REFERENCE` dict is not extended with
+them. Three `bg33`/`bgox31` legs are in that set; see `peptidebuilder/REPLICATES.md`.
 
 ## What to do next
 
